@@ -5,6 +5,7 @@ export type processOptions = {
   maxHeight: number;
   maxWidth: number;
   unicode: boolean;
+  wantedChars: string;
 };
 
 const canvas: HTMLCanvasElement = document.createElement('canvas'),
@@ -34,6 +35,10 @@ const rgbaToAnsi = (
     | Uint8ClampedArray
     | [number, number, number, number]): boolean => (a ?? 0) < 13;
 
+// Helper to escape special characters for use in a Regular Expression
+const escapeRegExp = (str: string): string =>
+  str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const process = (
   image: CanvasImageSource,
   options: processOptions
@@ -41,6 +46,10 @@ export const process = (
   let imageWidth = image.width as number,
     imageHeight = image.height as number,
     content: string = '';
+
+  const [full = ' ', top = '▀', bottom = '▄'] = (
+    options.wantedChars || ' ▀▄'
+  ).split('');
 
   if (imageWidth > options.maxWidth) {
     const scale = imageWidth / options.maxWidth;
@@ -69,30 +78,34 @@ export const process = (
     const endOfLine = (): boolean => i > 0 && (i / 4) % imageWidth === 0;
 
     if (options.unicode) {
-      const top = pixelData.slice(i, i + 4),
-        bottom = pixelData.slice(i + imageWidth * 4, i + 4 + imageWidth * 4);
+      const topPixel = pixelData.slice(i, i + 4),
+        bottomPixel = pixelData.slice(
+          i + imageWidth * 4,
+          i + 4 + imageWidth * 4
+        );
 
       if (
-        (top[0] === bottom[0] &&
-          top[1] === bottom[1] &&
-          top[2] === bottom[2] &&
-          !isTransparent(top) &&
-          !isTransparent(bottom)) ||
-        (isTransparent(top) && isTransparent(bottom))
+        (topPixel[0] === bottomPixel[0] &&
+          topPixel[1] === bottomPixel[1] &&
+          topPixel[2] === bottomPixel[2] &&
+          !isTransparent(topPixel) &&
+          !isTransparent(bottomPixel)) ||
+        (isTransparent(topPixel) && isTransparent(bottomPixel))
       ) {
-        content += `\x1b[${rgbaToAnsi(top, options)}m `;
+        content += `\x1b[${rgbaToAnsi(topPixel, options)}m${full}`;
       } else {
-        if (isTransparent(bottom) && !isTransparent(top)) {
-          content += `\x1b[${rgbaToAnsi(bottom, options)};${rgbaToAnsi(
-            top,
+        if (isTransparent(bottomPixel) && !isTransparent(topPixel)) {
+          content += `\x1b[${rgbaToAnsi(bottomPixel, options)};${rgbaToAnsi(
+            topPixel,
             options,
             true
-          )}m▀`;
+          )}m${top}`;
         } else {
-          content += `\x1b[${rgbaToAnsi(bottom, options, true)};${rgbaToAnsi(
-            top,
-            options
-          )}m▄`;
+          content += `\x1b[${rgbaToAnsi(
+            bottomPixel,
+            options,
+            true
+          )};${rgbaToAnsi(topPixel, options)}m${bottom}`;
         }
       }
 
@@ -107,7 +120,10 @@ export const process = (
       continue;
     }
 
-    content += `\x1b[${rgbaToAnsi(pixelData.slice(i, i + 4), options)}m  `;
+    content += `\x1b[${rgbaToAnsi(
+      pixelData.slice(i, i + 4),
+      options
+    )}m${full}${full}`;
 
     i += 4;
 
@@ -117,8 +133,14 @@ export const process = (
   }
 
   // minimise output, replacing contiguous definitions
-  while (content.match(/(\x1b\[[0-9;]+m)([▄▀ ]+)\1/)) {
-    content = content.replace(/(\x1b\[[0-9;]+m)([▄▀ ]+)\1/g, '$1$2');
+  const minimisationRegex = new RegExp(
+    `(\\x1b\\[[0-9;]+m)([${escapeRegExp(bottom)}${escapeRegExp(
+      top
+    )}${escapeRegExp(full)}]+)\\1`,
+    'g'
+  );
+  while (content.match(minimisationRegex)) {
+    content = content.replace(minimisationRegex, '$1$2');
   }
 
   return content;

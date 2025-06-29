@@ -57,6 +57,9 @@ const fileButton = document.querySelector('.parser .btn') as HTMLLabelElement,
   unicodeInput = document.querySelector(
     'input[name="unicode"]'
   ) as HTMLInputElement,
+  wantedCharsInput = document.querySelector(
+    'input[name="wantedChars"]'
+  ) as HTMLInputElement,
   terminal = new Terminal({
     convertEol: true,
     theme: {
@@ -92,6 +95,7 @@ const fileButton = document.querySelector('.parser .btn') as HTMLLabelElement,
           maxHeight: parseInt(maxHeightInput.value, 10),
           maxWidth: parseInt(maxWidthInput.value, 10),
           unicode: unicodeInput.checked,
+          wantedChars: wantedCharsInput.value,
         });
 
         terminal.reset();
@@ -149,6 +153,7 @@ urlInput.addEventListener('input', (event) => {
   maxHeightInput,
   maxWidthInput,
   unicodeInput,
+  wantedCharsInput,
   fileInput,
   urlInput,
 ].forEach((input) =>
